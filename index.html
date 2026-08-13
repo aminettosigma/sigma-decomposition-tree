@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Decomposition Tree</title>
-  <script src="https://unpkg.com/@sigmacomputing/plugin"></script>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/@sigmacomputing/plugin@1.2.0/dist/umd/sigmacomputing-plugin.umd.js"></script>
   <style>
     :root {
       --pos: #1a7f37;      /* green (favorable)   */
@@ -223,7 +224,17 @@
   <script>
   (function () {
     "use strict";
-    const { client } = window.sigmaComputing.plugin;
+    // The UMD bundle registers the global `SigmaPlugin`; fall back to older names just in case.
+    var SDK = window.SigmaPlugin ||
+      (window.sigmaComputing && window.sigmaComputing.plugin) ||
+      window["@sigmacomputing/plugin"];
+    if (!SDK || !SDK.client) {
+      var el = document.getElementById("stage");
+      if (el) el.innerHTML = '<div class="msg"><div><div class="big">Plugin SDK failed to load</div>' +
+        'The Sigma plugin script could not be reached. Reload the workbook; if it persists, check that the plugin URL is publicly accessible.</div></div>';
+      return;
+    }
+    const client = SDK.client;
 
     /* ============ editor panel ============ */
     client.config.configureEditorPanel([
@@ -667,16 +678,16 @@
       selectedId = id;
       const val = n.selectValue && n.selectValue.trim() ? n.selectValue.trim() : (n.title || "");
       try {
-        if (CONFIG.selectVar) client.setVariable(CONFIG.selectVar, String(val));
-        if (CONFIG.onSelect) client.triggerAction(CONFIG.onSelect);
+        if (CONFIG.selectVar) client.config.setVariable("selectVar", String(val));
+        if (CONFIG.onSelect) client.config.triggerAction("onSelect");
       } catch (e) { console.warn("select failed:", e); }
       draw(); renderCrumbs();
     }
     function clearSelection() {
       selectedId = null;
       try {
-        if (CONFIG.selectVar) client.setVariable(CONFIG.selectVar, "");
-        if (CONFIG.onSelect) client.triggerAction(CONFIG.onSelect);
+        if (CONFIG.selectVar) client.config.setVariable("selectVar", "");
+        if (CONFIG.onSelect) client.config.triggerAction("onSelect");
       } catch (e) { console.warn("clear failed:", e); }
       draw(); renderCrumbs();
     }
