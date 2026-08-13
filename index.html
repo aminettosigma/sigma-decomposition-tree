@@ -167,6 +167,13 @@
       </div>
       <div class="hint" style="margin-top:-6px">Column lists come from the editor panel’s “Columns used by the tree.” For a Sigma metric on a huge table, use aggregation <b>First</b>.</div>
 
+      <div class="row">
+        <div class="field"><label>Value format</label><select id="f-value-fmt-type"></select></div>
+        <div class="field" style="flex:0 0 74px"><label>Decimals</label><input type="text" id="f-value-fmt-dec" placeholder="auto" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Prefix</label><input type="text" id="f-value-fmt-pre" placeholder="$" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Suffix</label><input type="text" id="f-value-fmt-suf" /></div>
+      </div>
+
       <div class="sec">Variance (optional)</div>
       <div class="field">
         <label>Variance mode</label>
@@ -198,10 +205,11 @@
           <select id="f-comparison-agg"></select>
         </div>
       </div>
-      <div class="field">
-        <label>Variance suffix</label>
-        <input type="text" id="f-varsuffix" placeholder="e.g. pp" />
-        <div class="hint">optional — appended after the variance (e.g. pp)</div>
+      <div class="row">
+        <div class="field"><label>Variance format</label><select id="f-var-fmt-type"></select></div>
+        <div class="field" style="flex:0 0 74px"><label>Decimals</label><input type="text" id="f-var-fmt-dec" placeholder="auto" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Prefix</label><input type="text" id="f-var-fmt-pre" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Suffix</label><input type="text" id="f-var-fmt-suf" placeholder="pp" /></div>
       </div>
 
       <div class="field inline">
@@ -209,14 +217,14 @@
         <label for="f-hib">Higher is better (green when variance ≥ 0)</label>
       </div>
 
-      <div class="sec">Bottom corners (optional)</div>
+      <div class="sec">Bottom-left corner (optional)</div>
       <div class="row">
         <div class="field">
-          <label>Left label</label>
+          <label>Label</label>
           <input type="text" id="f-c1label" placeholder="e.g. Loyalty" />
         </div>
         <div class="field">
-          <label>Left column</label>
+          <label>Column</label>
           <select id="f-c1col"></select>
         </div>
         <div class="field agg">
@@ -225,18 +233,32 @@
         </div>
       </div>
       <div class="row">
+        <div class="field"><label>Format</label><select id="f-c1-fmt-type"></select></div>
+        <div class="field" style="flex:0 0 74px"><label>Decimals</label><input type="text" id="f-c1-fmt-dec" placeholder="auto" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Prefix</label><input type="text" id="f-c1-fmt-pre" placeholder="$" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Suffix</label><input type="text" id="f-c1-fmt-suf" /></div>
+      </div>
+
+      <div class="sec">Bottom-right corner (optional)</div>
+      <div class="row">
         <div class="field">
-          <label>Right label</label>
+          <label>Label</label>
           <input type="text" id="f-c2label" placeholder="e.g. Non-Loyalty" />
         </div>
         <div class="field">
-          <label>Right column</label>
+          <label>Column</label>
           <select id="f-c2col"></select>
         </div>
         <div class="field agg">
           <label>Agg</label>
           <select id="f-c2agg"></select>
         </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Format</label><select id="f-c2-fmt-type"></select></div>
+        <div class="field" style="flex:0 0 74px"><label>Decimals</label><input type="text" id="f-c2-fmt-dec" placeholder="auto" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Prefix</label><input type="text" id="f-c2-fmt-pre" placeholder="$" /></div>
+        <div class="field" style="flex:0 0 66px"><label>Suffix</label><input type="text" id="f-c2-fmt-suf" /></div>
       </div>
 
       <div class="field">
@@ -295,6 +317,7 @@
     let selectedId = null;      // current click-to-filter selection (session only)
     const localCollapse = {};   // id -> bool, viewer's ephemeral collapse overrides
     let AGG_CACHE = {};         // "colId|agg" -> aggregated value, cleared on new data
+    let bootstrapped = false;   // one-time auto-register of referenced columns
 
     const AGG_OPTIONS = [
       { v: "sum", t: "Sum" }, { v: "avg", t: "Average" },
@@ -369,6 +392,47 @@
     function fmtPct(r) {
       return (r * 100).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
     }
+
+    // ---- Per-field number formatting (overrides the column's Sigma format) ----
+    const FORMAT_TYPES = [
+      { v: "auto", t: "Auto (column format)" },
+      { v: "number", t: "Number" },
+      { v: "currency", t: "Currency ($)" },
+      { v: "percent", t: "Percent (%)" },
+      { v: "compact", t: "Compact (K/M/B/T)" }
+    ];
+    function fmtFixed(v, dec, grp) {
+      const opts = { useGrouping: !!grp };
+      if (dec == null) opts.maximumFractionDigits = 2;
+      else { opts.minimumFractionDigits = dec; opts.maximumFractionDigits = dec; }
+      return v.toLocaleString("en-US", opts);
+    }
+    function compactStr(v, dec) {
+      if (v >= 1e12) return (v / 1e12).toFixed(dec) + "T";
+      if (v >= 1e9) return (v / 1e9).toFixed(dec) + "B";
+      if (v >= 1e6) return (v / 1e6).toFixed(dec) + "M";
+      if (v >= 1e3) return (v / 1e3).toFixed(dec) + "K";
+      return v.toFixed(dec);
+    }
+    // spec: { type, decimals, prefix, suffix }
+    function fmtWith(num, spec) {
+      const n = typeof num === "number" ? num : parseFloat(num);
+      if (n == null || isNaN(n)) return "—";
+      const type = (spec && spec.type) || "number";
+      let dec = spec ? spec.decimals : null;
+      dec = (dec === "" || dec == null) ? null : parseInt(dec, 10);
+      if (isNaN(dec)) dec = null;
+      let pre = (spec && spec.prefix) || "";
+      let suf = (spec && spec.suffix) || "";
+      const neg = n < 0, a = Math.abs(n);
+      let body;
+      if (type === "percent") { body = fmtFixed(a * 100, dec == null ? 1 : dec, true); if (!suf) suf = "%"; }
+      else if (type === "compact") { body = compactStr(a, dec == null ? 1 : dec); }
+      else if (type === "currency") { if (!pre) pre = "$"; body = fmtFixed(a, dec == null ? 2 : dec, true); }
+      else { body = fmtFixed(a, dec, true); }
+      return (neg ? "-" : "") + pre + body + suf;
+    }
+    function hasFmt(spec) { return !!(spec && spec.type && spec.type !== "auto"); }
     // Aggregate a whole column with the chosen method. Cached per (colId, agg) until new data.
     function aggValue(colId, agg) {
       if (!colId) return null;
@@ -400,13 +464,17 @@
       return out;
     }
     // Aggregated value formatted for display (counts show as plain integers).
-    function displayAgg(colId, agg) {
+    function displayAgg(colId, agg, spec) {
       if (!colId) return "—";
       const v = aggValue(colId, agg);
       if (v == null || v === "") return "—";
-      if (agg === "count" || agg === "countDistinct") {
+      if ((agg === "count" || agg === "countDistinct") && !hasFmt(spec)) {
         const n = typeof v === "number" ? v : parseFloat(v);
         return Math.round(n).toLocaleString("en-US");
+      }
+      if (hasFmt(spec)) {
+        const n = numOf(v);
+        return n == null ? String(v) : fmtWith(n, spec);
       }
       return formatVal(colId, v);
     }
@@ -424,6 +492,7 @@
     }
     function saveSettings() {
       client.config.set({ config: JSON.stringify(SETTINGS) });
+      syncColumns();
     }
 
     client.config.subscribe(function (cfg) {
@@ -491,12 +560,14 @@
       return chain;
     }
     function newNode() {
+      const fmt = function () { return { type: "auto", decimals: null, prefix: "", suffix: "" }; };
       return {
         id: uid(), title: "New KPI",
-        valueCol: "", valueAgg: "sum",
-        varMode: "column", varianceCol: "", varianceAgg: "avg",
-        comparisonCol: "", comparisonAgg: "sum", varianceSuffix: "", higherIsBetter: true,
-        c1Label: "", c1Col: "", c1Agg: "sum", c2Label: "", c2Col: "", c2Agg: "sum",
+        valueCol: "", valueAgg: "sum", valueFmt: fmt(),
+        varMode: "column", varianceCol: "", varianceAgg: "avg", comparisonCol: "", comparisonAgg: "sum",
+        varFmt: fmt(), higherIsBetter: true,
+        c1Label: "", c1Col: "", c1Agg: "sum", c1Fmt: fmt(),
+        c2Label: "", c2Col: "", c2Agg: "sum", c2Fmt: fmt(),
         selectValue: "",
         children: []
       };
@@ -542,10 +613,10 @@
       const cx = x + BOX_W / 2;
 
       // main value (aggregated) — the only required field
-      const valStr = displayAgg(node.valueCol, node.valueAgg || "sum");
+      const valStr = displayAgg(node.valueCol, node.valueAgg || "sum", node.valueFmt);
 
       // variance — direct column, or computed vs a comparison column (all aggregated)
-      const suffix = node.varianceSuffix ? " " + node.varianceSuffix : "";
+      const vf = node.varFmt || { type: "auto", suffix: node.varianceSuffix || "" };
       const mode = node.varMode || "column";
       let varNum = null, varStr = "";
       if (mode === "pct" || mode === "delta") {
@@ -553,12 +624,18 @@
         const comp = numOf(aggValue(node.comparisonCol, node.comparisonAgg || "sum"));
         if (cur != null && comp != null) {
           if (mode === "pct") {
-            if (comp !== 0) { varNum = (cur - comp) / comp; varStr = fmtPct(varNum) + suffix; }
-          } else { varNum = cur - comp; varStr = formatVal(node.valueCol, varNum) + suffix; }
+            if (comp !== 0) {
+              varNum = (cur - comp) / comp;
+              varStr = fmtWith(varNum, { type: "percent", decimals: vf.decimals, prefix: vf.prefix, suffix: vf.suffix });
+            }
+          } else {
+            varNum = cur - comp;
+            varStr = hasFmt(vf) ? fmtWith(varNum, vf) : formatVal(node.valueCol, varNum);
+          }
         }
       } else if (node.varianceCol) {
         varNum = numOf(aggValue(node.varianceCol, node.varianceAgg || "avg"));
-        if (varNum != null) varStr = displayAgg(node.varianceCol, node.varianceAgg || "avg") + suffix;
+        if (varNum != null) varStr = displayAgg(node.varianceCol, node.varianceAgg || "avg", vf);
       }
 
       const hib = node.higherIsBetter !== false;
@@ -621,14 +698,14 @@
         const single = !(hasC1 && hasC2);
         const lx = single ? cx : x + BOX_W * 0.27;
         const rx = single ? cx : x + BOX_W * 0.73;
-        function corner(px, label, colId, agg) {
+        function corner(px, label, colId, agg, spec) {
           parts.push('<text x="' + px + '" y="' + (y + BOX_H - 26) + '" text-anchor="middle" font-size="9.5" fill="#8a939b">' +
             esc(truncate(label || "", 18)) + '</text>');
           parts.push('<text x="' + px + '" y="' + (y + BOX_H - 10) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#2b323a">' +
-            esc(colId ? displayAgg(colId, agg || "sum") : "—") + '</text>');
+            esc(colId ? displayAgg(colId, agg || "sum", spec) : "—") + '</text>');
         }
-        if (hasC1) corner(lx, node.c1Label, node.c1Col, node.c1Agg);
-        if (hasC2) corner(rx, node.c2Label, node.c2Col, node.c2Agg);
+        if (hasC1) corner(lx, node.c1Label, node.c1Col, node.c1Agg, node.c1Fmt);
+        if (hasC2) corner(rx, node.c2Label, node.c2Col, node.c2Agg, node.c2Fmt);
       }
 
       // header controls: edit (pencil) + delete (x), edit mode only
@@ -684,10 +761,10 @@
         showMsg('<div><div class="big">Select a data source</div>Choose the element (e.g. your main table) in the plugin editor panel.</div>');
         return;
       }
-      if (!availableColumns().length) {
+      if (!pickerColumns().length) {
         showMsg(editMode
-          ? '<div><div class="big">Add columns to the tree</div>In the editor panel, use <b>“Columns used by the tree”</b> to add every column your boxes will display. Sigma only sends data for those columns.</div>'
-          : '<div><div class="big">Not configured yet</div>Ask an editor to add columns to this plugin.</div>');
+          ? '<div><div class="big">Waiting for columns</div>Add your data element as <b>Source</b> in the editor panel. Then add a box and pick a column or metric — it registers automatically.</div>'
+          : '<div><div class="big">Not configured yet</div>Ask an editor to configure this plugin.</div>');
         return;
       }
       if (!roots.length) {
@@ -839,15 +916,34 @@
     const overlay = document.getElementById("overlay");
     let editingId = null;
 
-    // Columns the author added in the editor panel — the ONLY columns Sigma delivers data for.
+    // Columns the author added in the editor panel — the ones Sigma actually delivers data for.
     function availableColumns() {
       const c = CONFIG.columns;
       const ids = Array.isArray(c) ? c : (c ? [c] : []);
       return ids.filter(Boolean);
     }
+    // Everything the element exposes (metrics, measures, dimensions) — what the box pickers list.
+    function pickerColumns() {
+      const set = new Set(availableColumns());
+      Object.keys(COLUMNS).forEach(function (id) { set.add(id); });
+      return Array.from(set);
+    }
+    // Ensure every column referenced by the tree is registered so Sigma sends its data.
+    function syncColumns() {
+      const ids = new Set(availableColumns());
+      walk(SETTINGS.roots, function (n) {
+        [n.valueCol, n.varianceCol, n.comparisonCol, n.c1Col, n.c2Col].forEach(function (c) { if (c) ids.add(c); });
+      });
+      const arr = Array.from(ids).filter(Boolean);
+      const cur = availableColumns();
+      const changed = arr.length !== cur.length || arr.some(function (x) { return cur.indexOf(x) < 0; });
+      if (changed) {
+        try { client.config.setKey("columns", arr); } catch (e) { console.warn("column auto-register failed:", e); }
+      }
+    }
     function columnOptions(selected) {
-      // only declared columns have data (incl. metrics/text/date — aggregation handles the type)
-      const list = availableColumns();
+      // list everything the element exposes; referenced columns get auto-registered for data
+      const list = pickerColumns();
       let html = '<option value="">— none —</option>';
       list.forEach(function (id) {
         const name = (COLUMNS[id] && COLUMNS[id].name) || id;
@@ -865,6 +961,29 @@
       return AGG_OPTIONS.map(function (o) {
         return '<option value="' + o.v + '"' + (o.v === selected ? " selected" : "") + ">" + o.t + "</option>";
       }).join("");
+    }
+    function fmtTypeOptions(selected) {
+      return FORMAT_TYPES.map(function (o) {
+        return '<option value="' + o.v + '"' + (o.v === selected ? " selected" : "") + ">" + o.t + "</option>";
+      }).join("");
+    }
+    // p = id prefix, e.g. "f-value-fmt" -> f-value-fmt-type/-dec/-pre/-suf
+    function setFmtFields(p, spec) {
+      spec = spec || {};
+      document.getElementById(p + "-type").innerHTML = fmtTypeOptions(spec.type || "auto");
+      document.getElementById(p + "-dec").value = (spec.decimals == null ? "" : spec.decimals);
+      document.getElementById(p + "-pre").value = spec.prefix || "";
+      document.getElementById(p + "-suf").value = spec.suffix || "";
+    }
+    function getFmtFields(p) {
+      const decRaw = document.getElementById(p + "-dec").value.trim();
+      const dec = decRaw === "" ? null : (parseInt(decRaw, 10) || 0);
+      return {
+        type: document.getElementById(p + "-type").value,
+        decimals: dec,
+        prefix: document.getElementById(p + "-pre").value,
+        suffix: document.getElementById(p + "-suf").value
+      };
     }
 
     const VARMODE_HINTS = {
@@ -886,19 +1005,22 @@
       document.getElementById("f-title").value = n.title || "";
       document.getElementById("f-value").innerHTML = columnOptions(n.valueCol);
       document.getElementById("f-value-agg").innerHTML = aggOptions(n.valueAgg || "sum");
+      setFmtFields("f-value-fmt", n.valueFmt);
       document.getElementById("f-varmode").value = n.varMode || "column";
       document.getElementById("f-variance").innerHTML = columnOptions(n.varianceCol);
       document.getElementById("f-variance-agg").innerHTML = aggOptions(n.varianceAgg || "avg");
       document.getElementById("f-comparison").innerHTML = columnOptions(n.comparisonCol);
       document.getElementById("f-comparison-agg").innerHTML = aggOptions(n.comparisonAgg || "sum");
-      document.getElementById("f-varsuffix").value = n.varianceSuffix || "";
+      setFmtFields("f-var-fmt", n.varFmt || { type: "auto", suffix: n.varianceSuffix || "" });
       document.getElementById("f-hib").checked = n.higherIsBetter !== false;
       document.getElementById("f-c1label").value = n.c1Label || "";
       document.getElementById("f-c1col").innerHTML = columnOptions(n.c1Col);
       document.getElementById("f-c1agg").innerHTML = aggOptions(n.c1Agg || "sum");
+      setFmtFields("f-c1-fmt", n.c1Fmt);
       document.getElementById("f-c2label").value = n.c2Label || "";
       document.getElementById("f-c2col").innerHTML = columnOptions(n.c2Col);
       document.getElementById("f-c2agg").innerHTML = aggOptions(n.c2Agg || "sum");
+      setFmtFields("f-c2-fmt", n.c2Fmt);
       document.getElementById("f-selval").value = n.selectValue || "";
       syncVarModeFields();
       overlay.classList.add("show");
@@ -912,19 +1034,22 @@
       n.title = document.getElementById("f-title").value;
       n.valueCol = document.getElementById("f-value").value;
       n.valueAgg = document.getElementById("f-value-agg").value;
+      n.valueFmt = getFmtFields("f-value-fmt");
       n.varMode = document.getElementById("f-varmode").value;
       n.varianceCol = document.getElementById("f-variance").value;
       n.varianceAgg = document.getElementById("f-variance-agg").value;
       n.comparisonCol = document.getElementById("f-comparison").value;
       n.comparisonAgg = document.getElementById("f-comparison-agg").value;
-      n.varianceSuffix = document.getElementById("f-varsuffix").value.trim();
+      n.varFmt = getFmtFields("f-var-fmt");
       n.higherIsBetter = document.getElementById("f-hib").checked;
       n.c1Label = document.getElementById("f-c1label").value;
       n.c1Col = document.getElementById("f-c1col").value;
       n.c1Agg = document.getElementById("f-c1agg").value;
+      n.c1Fmt = getFmtFields("f-c1-fmt");
       n.c2Label = document.getElementById("f-c2label").value;
       n.c2Col = document.getElementById("f-c2col").value;
       n.c2Agg = document.getElementById("f-c2agg").value;
+      n.c2Fmt = getFmtFields("f-c2-fmt");
       n.selectValue = document.getElementById("f-selval").value.trim();
       saveSettings();
       closeEditor();
@@ -940,6 +1065,11 @@
 
     /* ============ render orchestration ============ */
     function renderAll() {
+      // once columns metadata is available, register any columns an existing tree references
+      if (!bootstrapped && CONFIG.source && Object.keys(COLUMNS).length) {
+        bootstrapped = true;
+        syncColumns();
+      }
       const editMode = !!CONFIG.editMode;
       toolbar.classList.toggle("show", editMode);
       chkFit.checked = SETTINGS.scaleToFit !== false;

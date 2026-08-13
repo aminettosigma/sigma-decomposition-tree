@@ -41,12 +41,13 @@ at a public URL and register that URL in Sigma.
 ## Using it in a workbook
 1. Add the plugin element to a page; in the editor panel set **Source** to your element
    (the main table is fine).
-2. In the editor panel, add every column your boxes will use to **“Columns used by the
-   tree.”** **Required** — Sigma only delivers data for columns listed here, so a box bound
-   to a column that isn't in this list shows `—`.
-3. Turn on **Edit mode**. Click **＋ Add box**, then the **✎** on a box to pick a column and
-   an **aggregation** for the value / variance / corners. Use the **＋** below any box to add
-   children.
+2. Turn on **Edit mode**. Click **＋ Add box**, then the **✎** on a box to pick a **column or
+   metric** and an **aggregation** for the value / variance / corners. Any column you bind is
+   **auto-registered** — the plugin adds it to "Columns used by the tree" for you so Sigma
+   delivers its data. (You can also pre-populate that list manually in the editor panel.)
+   Use the **＋** below any box to add children.
+   - **Metrics / measures** appear in the pickers alongside dimensions. For a metric (already
+     aggregated by Sigma), set the aggregation to **First** so the box shows its value as-is.
 4. Turn **Edit mode** off for viewers. "Scale to fit" (toolbar) keeps the whole tree
    visible; turn it off to render at full size and scroll.
 
@@ -56,10 +57,17 @@ Each box has a **Variance mode**:
 - **Computed: % change vs comparison** — `(main value − comparison) ÷ comparison`, shown as a %.
 - **Computed: delta vs comparison** — `main value − comparison`, shown in the value's format.
 
-For the direct mode, the column's own Sigma number format is respected (currency → `$0.07`,
-percent → `19.3%`, etc.). Arrow direction and color come from the sign, flipped when
-"Higher is better" is unchecked. Use the **Suffix** field for units Sigma can't format on
-its own (e.g. `pp`).
+Arrow direction and color come from the sign, flipped when "Higher is better" is unchecked.
+
+## Formatting
+Each numeric field (value, variance, and both corners) has its own **Format** controls:
+- **Type:** Auto (use the column's Sigma format), Number, Currency (`$`), Percent (`%`), or
+  **Compact (K/M/B/T)** SI units.
+- **Decimals:** fixed decimal places (blank = automatic).
+- **Prefix / Suffix:** free text, e.g. prefix `$`, `€`; suffix `pp`, `bps`, ` units`.
+
+Examples: a raw sum `25365929836087` → Compact + prefix `$` → **$25.4T**; a ratio column →
+Percent, 1 decimal → **19.3%**. Negative values place the sign before the prefix (`-$0.02`).
 
 ## Click-to-filter + breadcrumb (optional)
 In the editor panel, bind **Select → variable** (a text control variable) and/or
