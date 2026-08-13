@@ -6,12 +6,22 @@ mode** you build the tree by hand: add a root box, add any number of child boxes
 any box (arbitrary depth), and the layout + connecting arrows auto-reflow and scale to fit.
 
 ## Data model
-- **Source:** a single (aggregated) row element — each column is one KPI value.
-  (If the element has multiple rows, the first non-null value of each column is used.)
-- **Per box you pick:** main-value column, variance column (+ optional suffix like `pp`),
-  "higher is better" direction, and a column + label for each bottom corner.
+- **Source:** any element — including the **raw table**. Each field you bind is **aggregated
+  across the column** by the method you choose, so you don't need a pre-summarized element.
+- **Per field (main value, variance, comparison, each corner) you pick a column + an
+  aggregation:** Sum, Average, Min, Max, Count, Count distinct, First, or Last. Aggregation
+  results are cached until the data changes, so redraws stay fast.
+- **Only the main value is required** — variance and the two bottom corners are optional. A box
+  can show just the big KPI number.
 - **Structure + all box config** is stored as JSON in the workbook (the `config` editor field —
   managed by the plugin, no need to hand-edit it).
+
+### Large tables & Sigma metrics
+Sigma delivers the plugin a **capped window** of a very large element's rows, so a client-side
+Sum/Avg over a raw multi-million-row table may reflect only part of the data. For accurate
+totals on big tables, bind a **Sigma metric** (a measure aggregated server-side in the data
+model) as the column and set its aggregation to **First** or **Average** — the metric already
+carries the correct value. Use plugin-side Sum/Avg/etc. on grouped or reasonably-sized elements.
 
 ## Files
 - `index.html` — the entire plugin (vanilla JS + CDN SDK, no build step).
