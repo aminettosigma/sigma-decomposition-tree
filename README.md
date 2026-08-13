@@ -39,11 +39,15 @@ Any static host works (Netlify, Vercel, S3+CloudFront, GitHub Pages). Host `inde
 at a public URL and register that URL in Sigma.
 
 ## Using it in a workbook
-1. Add the plugin element to a page; in the editor panel set **Source** to your
-   single-row KPI element.
-2. Turn on **Edit mode**. Click **＋ Add box**, then the **✎** on a box to choose its
-   value / variance / corner columns. Use the **＋** below any box to add children.
-3. Turn **Edit mode** off for viewers. "Scale to fit" (toolbar) keeps the whole tree
+1. Add the plugin element to a page; in the editor panel set **Source** to your element
+   (the main table is fine).
+2. In the editor panel, add every column your boxes will use to **“Columns used by the
+   tree.”** **Required** — Sigma only delivers data for columns listed here, so a box bound
+   to a column that isn't in this list shows `—`.
+3. Turn on **Edit mode**. Click **＋ Add box**, then the **✎** on a box to pick a column and
+   an **aggregation** for the value / variance / corners. Use the **＋** below any box to add
+   children.
+4. Turn **Edit mode** off for viewers. "Scale to fit" (toolbar) keeps the whole tree
    visible; turn it off to render at full size and scroll.
 
 ## Variance display

@@ -165,6 +165,7 @@
           <select id="f-value-agg"></select>
         </div>
       </div>
+      <div class="hint" style="margin-top:-6px">Column lists come from the editor panel’s “Columns used by the tree.” For a Sigma metric on a huge table, use aggregation <b>First</b>.</div>
 
       <div class="sec">Variance (optional)</div>
       <div class="field">
@@ -271,6 +272,7 @@
     /* ============ editor panel ============ */
     client.config.configureEditorPanel([
       { name: "source", type: "element" },
+      { name: "columns", type: "column", source: "source", allowMultiple: true, label: "Columns used by the tree" },
       { name: "selectVar", type: "variable", allowedTypes: ["text"], label: "Select → variable (optional)" },
       { name: "onSelect", type: "action-trigger", label: "Select → action (optional)" },
       { name: "config", type: "text", label: "Tree config (JSON — managed by the plugin)", defaultValue: "" },
@@ -679,7 +681,13 @@
       const editMode = !!CONFIG.editMode;
 
       if (!CONFIG.source) {
-        showMsg('<div><div class="big">Select a data source</div>Choose the element (a single aggregated row) in the plugin editor panel.</div>');
+        showMsg('<div><div class="big">Select a data source</div>Choose the element (e.g. your main table) in the plugin editor panel.</div>');
+        return;
+      }
+      if (!availableColumns().length) {
+        showMsg(editMode
+          ? '<div><div class="big">Add columns to the tree</div>In the editor panel, use <b>“Columns used by the tree”</b> to add every column your boxes will display. Sigma only sends data for those columns.</div>'
+          : '<div><div class="big">Not configured yet</div>Ask an editor to add columns to this plugin.</div>');
         return;
       }
       if (!roots.length) {
@@ -831,9 +839,15 @@
     const overlay = document.getElementById("overlay");
     let editingId = null;
 
+    // Columns the author added in the editor panel — the ONLY columns Sigma delivers data for.
+    function availableColumns() {
+      const c = CONFIG.columns;
+      const ids = Array.isArray(c) ? c : (c ? [c] : []);
+      return ids.filter(Boolean);
+    }
     function columnOptions(selected) {
-      // all columns (incl. metrics/text/date) — aggregation handles the type
-      const list = Object.keys(COLUMNS);
+      // only declared columns have data (incl. metrics/text/date — aggregation handles the type)
+      const list = availableColumns();
       let html = '<option value="">— none —</option>';
       list.forEach(function (id) {
         const name = (COLUMNS[id] && COLUMNS[id].name) || id;
