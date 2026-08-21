@@ -297,10 +297,14 @@
       { name: "columns", type: "column", source: "source", allowMultiple: true, label: "Columns used by the tree" },
       { name: "selectVar", type: "variable", allowedTypes: ["text"], label: "Select → variable (optional)" },
       { name: "onSelect", type: "action-trigger", label: "Select → action (optional)" },
-      { name: "config", type: "text", label: "Tree config 1/4 (JSON — managed by the plugin)", defaultValue: "" },
-      { name: "config2", type: "text", label: "Tree config 2/4", defaultValue: "" },
-      { name: "config3", type: "text", label: "Tree config 3/4", defaultValue: "" },
-      { name: "config4", type: "text", label: "Tree config 4/4", defaultValue: "" },
+      { name: "config", type: "text", label: "Tree config 1/8 (JSON — managed by the plugin)", defaultValue: "" },
+      { name: "config2", type: "text", label: "Tree config 2/8", defaultValue: "" },
+      { name: "config3", type: "text", label: "Tree config 3/8", defaultValue: "" },
+      { name: "config4", type: "text", label: "Tree config 4/8", defaultValue: "" },
+      { name: "config5", type: "text", label: "Tree config 5/8", defaultValue: "" },
+      { name: "config6", type: "text", label: "Tree config 6/8", defaultValue: "" },
+      { name: "config7", type: "text", label: "Tree config 7/8", defaultValue: "" },
+      { name: "config8", type: "text", label: "Tree config 8/8", defaultValue: "" },
       { name: "editMode", type: "toggle", label: "Edit mode" }
     ]);
 
@@ -315,8 +319,9 @@
     // the element then sits on "loading" forever with no error anywhere. So the layout
     // JSON is split over four entries and re-joined on read. Reading tolerates the old
     // single-entry form, so workbooks written before this change keep working.
-    const CHUNK_KEYS = ["config", "config2", "config3", "config4"];
-    const CHUNK_SIZE = 4000;
+    const CHUNK_KEYS = ["config", "config2", "config3", "config4",
+                        "config5", "config6", "config7", "config8"];
+    const CHUNK_SIZE = 2000;
 
     /* ============ state ============ */
     let CONFIG = {};

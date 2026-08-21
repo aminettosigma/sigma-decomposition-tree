@@ -31,8 +31,8 @@ carries the correct value. Use plugin-side Sum/Avg/etc. on grouped or reasonably
 
 Three changes, all backward compatible with existing workbooks:
 
-1. **The layout JSON is split over four config entries** (`config`…`config4`, 4,000
-   chars each) and re-joined on read. A single Sigma config text entry stops being
+1. **The layout JSON is split over eight config entries** (`config`…`config8`, 2,000
+   chars each, 16 KB total) and re-joined on read. A single Sigma config text entry stops being
    delivered somewhere past a few KB, and the symptom is the worst kind: the element
    sits on "loading" forever with no error in the console, in the element, or in the
    spec. Reading still accepts the old single-entry form, so nothing already saved
@@ -47,6 +47,12 @@ Three changes, all backward compatible with existing workbooks:
    change the stage's own client size (a scrollbar appearing or going away), so the
    observer could re-enter `draw()` indefinitely and peg the iframe. It now ignores
    sub-2px churn and coalesces to one animation frame.
+
+Chunk size is deliberately 2,000, not 4,000. Measured in a live browser on papercrane:
+a single entry of 266 / 1,232 / 3,217 chars renders, and 4,981 **never loads** — so the
+ceiling is somewhere in the 3,217–4,981 gap and a 4,000-char chunk would be a coin flip.
+2,000 sits safely below everything proven good. `CHUNK_SIZE`/`CHUNK_KEYS` here must stay
+in step with `CFG_CHUNK`/`CFG_KEYS` in `customer-value-dashboard/build.py`.
 
 After deploying, set `TREE_CHUNK=1` when running
 `customer-value-dashboard/build.py` so the workbook writes the chunked form.
