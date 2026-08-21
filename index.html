@@ -297,7 +297,10 @@
       { name: "columns", type: "column", source: "source", allowMultiple: true, label: "Columns used by the tree" },
       { name: "selectVar", type: "variable", allowedTypes: ["text"], label: "Select → variable (optional)" },
       { name: "onSelect", type: "action-trigger", label: "Select → action (optional)" },
-      { name: "config", type: "text", label: "Tree config (JSON — managed by the plugin)", defaultValue: "" },
+      { name: "config", type: "text", label: "Tree config 1/4 (JSON — managed by the plugin)", defaultValue: "" },
+      { name: "config2", type: "text", label: "Tree config 2/4", defaultValue: "" },
+      { name: "config3", type: "text", label: "Tree config 3/4", defaultValue: "" },
+      { name: "config4", type: "text", label: "Tree config 4/4", defaultValue: "" },
       { name: "editMode", type: "toggle", label: "Edit mode" }
     ]);
 
@@ -307,6 +310,13 @@
     const POS = "#1a7f37", NEG = "#c0392b", NEUTRAL = "#1f2933";
 
     const DEFAULTS = { version: 1, scaleToFit: true, roots: [] };
+
+    // A single Sigma config text entry stops being delivered somewhere past a few KB —
+    // the element then sits on "loading" forever with no error anywhere. So the layout
+    // JSON is split over four entries and re-joined on read. Reading tolerates the old
+    // single-entry form, so workbooks written before this change keep working.
+    const CHUNK_KEYS = ["config", "config2", "config3", "config4"];
+    const CHUNK_SIZE = 4000;
 
     /* ============ state ============ */
     let CONFIG = {};
@@ -480,24 +490,56 @@
     }
 
     /* ============ config / data plumbing ============ */
+    let configError = "";      // surfaced in the empty state instead of failing silently
+
+    function joinChunks(cfg) {
+      return CHUNK_KEYS.map(function (k) { return (cfg && cfg[k]) || ""; }).join("");
+    }
     function loadSettings(str) {
+      configError = "";
       if (!str || !str.trim()) return clone(DEFAULTS);
       try {
         const parsed = JSON.parse(str);
         return Object.assign(clone(DEFAULTS), parsed);
       } catch (e) {
-        console.warn("Bad tree config JSON:", e);
+        configError = "the saved layout is not valid JSON (" + str.length +
+          " chars received). If it looks truncated, the config entry was cut off.";
+        console.warn("Bad tree config JSON:", e, "received length:", str.length);
         return clone(DEFAULTS);
       }
     }
+    // Only write what differs from the default, then split across the four entries.
+    function trimNode(n) {
+      const d = newNode(), out = {};
+      Object.keys(n).forEach(function (k) {
+        if (k === "children") return;
+        if (JSON.stringify(n[k]) !== JSON.stringify(d[k])) out[k] = n[k];
+      });
+      out.id = n.id;
+      out.title = n.title;
+      out.valueCol = n.valueCol;
+      const kids = (n.children || []).map(trimNode);
+      if (kids.length) out.children = kids;
+      return out;
+    }
     function saveSettings() {
-      client.config.set({ config: JSON.stringify(SETTINGS) });
+      const doc = Object.assign({}, SETTINGS, { roots: (SETTINGS.roots || []).map(trimNode) });
+      const str = JSON.stringify(doc);
+      const patch = {};
+      for (let i = 0; i < CHUNK_KEYS.length; i++) {
+        patch[CHUNK_KEYS[i]] = str.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      }
+      if (str.length > CHUNK_KEYS.length * CHUNK_SIZE) {
+        console.warn("Tree config is " + str.length + " bytes — over the " +
+          CHUNK_KEYS.length * CHUNK_SIZE + " byte budget. Shorten titles or split the tree.");
+      }
+      client.config.set(patch);
       syncColumns();
     }
 
     client.config.subscribe(function (cfg) {
       CONFIG = cfg || {};
-      SETTINGS = loadSettings(CONFIG.config);
+      SETTINGS = loadSettings(joinChunks(CONFIG));
       resubscribe(CONFIG.source);
       renderAll();
     });
@@ -762,9 +804,16 @@
         return;
       }
       if (!pickerColumns().length) {
-        showMsg(editMode
-          ? '<div><div class="big">Waiting for columns</div>Add your data element as <b>Source</b> in the editor panel. Then add a box and pick a column or metric — it registers automatically.</div>'
-          : '<div><div class="big">Not configured yet</div>Ask an editor to configure this plugin.</div>');
+        showMsg('<div><div class="big">Waiting for columns</div>' +
+          (editMode
+            ? 'Add your data element as <b>Source</b> in the editor panel, then add a box and pick a column.'
+            : 'Sigma has not delivered any column metadata to this plugin yet.') +
+          '<div style="margin-top:10px;font-size:11px;color:#8a939b">' + esc(plumbingReport()) +
+          "</div></div>");
+        return;
+      }
+      if (!roots.length && configError) {
+        showMsg('<div><div class="big">Tree layout could not be read</div>' + esc(configError) + "</div>");
         return;
       }
       if (!roots.length) {
@@ -1064,7 +1113,26 @@
     chkFit.onchange = function () { SETTINGS.scaleToFit = chkFit.checked; saveSettings(); };
 
     /* ============ render orchestration ============ */
+    function plumbingReport() {
+      const joined = joinChunks(CONFIG);
+      const cols = Object.keys(COLUMNS).length;
+      const withData = Object.keys(DATA).filter(function (k) {
+        return DATA[k] && DATA[k].length;
+      }).length;
+      return "config " + joined.length + " chars · " + (CONFIG.source ? "source set" : "NO source") +
+        " · " + cols + " columns declared · " + withData + " columns with data";
+    }
     function renderAll() {
+      try {
+        renderAllInner();
+      } catch (e) {
+        console.error("Decomposition tree failed to render:", e);
+        showMsg('<div><div class="big">Tree failed to render</div>' +
+          esc(String((e && e.message) || e)) + '<div style="margin-top:10px;font-size:11px;color:#8a939b">' +
+          esc(plumbingReport()) + "</div></div>");
+      }
+    }
+    function renderAllInner() {
       // once columns metadata is available, register any columns an existing tree references
       if (!bootstrapped && CONFIG.source && Object.keys(COLUMNS).length) {
         bootstrapped = true;
@@ -1078,8 +1146,20 @@
       renderCrumbs();
     }
 
-    // redraw on container resize (required — Sigma sizes the iframe after first paint)
-    if (window.ResizeObserver) new ResizeObserver(function () { draw(); }).observe(stage);
+    // Redraw on container resize (required — Sigma sizes the iframe after first paint).
+    // draw() writes stage.innerHTML, which can itself change the stage's client size (a
+    // scrollbar appearing or going away), so an unguarded observer can ping-pong forever
+    // and peg the iframe. Only react to a real size change, and coalesce to one frame.
+    if (window.ResizeObserver) {
+      let lastW = -1, lastH = -1, queued = 0;
+      new ResizeObserver(function () {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+        lastW = w; lastH = h;
+        if (queued) return;
+        queued = requestAnimationFrame(function () { queued = 0; draw(); });
+      }).observe(stage);
+    }
     window.addEventListener("resize", draw);
   })();
   </script>

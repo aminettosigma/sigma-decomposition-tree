@@ -25,6 +25,33 @@ carries the correct value. Use plugin-side Sum/Avg/etc. on grouped or reasonably
 
 ## Files
 - `index.html` — the entire plugin (vanilla JS + CDN SDK, no build step).
+- `index.html.bak` — the build immediately before the 2026-08-21 robustness patch.
+
+## 2026-08-21 patch — needs deploying
+
+Three changes, all backward compatible with existing workbooks:
+
+1. **The layout JSON is split over four config entries** (`config`…`config4`, 4,000
+   chars each) and re-joined on read. A single Sigma config text entry stops being
+   delivered somewhere past a few KB, and the symptom is the worst kind: the element
+   sits on "loading" forever with no error in the console, in the element, or in the
+   spec. Reading still accepts the old single-entry form, so nothing already saved
+   breaks. Writing also strips every field that matches the node default first, so
+   editing a box in the UI no longer inflates the document.
+2. **It can no longer fail silently.** The whole render path is wrapped, and any
+   exception is drawn into the element along with a plumbing line — config chars,
+   whether a source is set, how many columns were declared, how many arrived with
+   data. The "waiting for columns" state shows the same line. If this plugin ever
+   goes blank again, the element itself will say why.
+3. **The resize observer is guarded.** `draw()` writes `stage.innerHTML`, which can
+   change the stage's own client size (a scrollbar appearing or going away), so the
+   observer could re-enter `draw()` indefinitely and peg the iframe. It now ignores
+   sub-2px churn and coalesces to one animation frame.
+
+After deploying, set `TREE_CHUNK=1` when running
+`customer-value-dashboard/build.py` so the workbook writes the chunked form.
+Until then leave it off — the currently hosted build reads `config` alone and would
+see a truncated document.
 
 ## Local development
 Serve the folder and register the local URL in Sigma:
