@@ -313,7 +313,7 @@
     const H_GAP = 30, V_GAP = 56, PAD = 26;
     const POS = "#1a7f37", NEG = "#c0392b", NEUTRAL = "#1f2933";
 
-    const DEFAULTS = { version: 1, scaleToFit: true, roots: [] };
+    const DEFAULTS = { version: 1, scaleToFit: true, defaults: null, roots: [] };
 
     // A single Sigma config text entry stops being delivered somewhere past a few KB —
     // the element then sits on "loading" forever with no error anywhere. So the layout
@@ -500,12 +500,23 @@
     function joinChunks(cfg) {
       return CHUNK_KEYS.map(function (k) { return (cfg && cfg[k]) || ""; }).join("");
     }
+    // Fill any key a node leaves out from the document-level `defaults` block.
+    function applyDefaults(s) {
+      const d = s && s.defaults;
+      if (!d) return s;
+      walk(s.roots, function (n) {
+        Object.keys(d).forEach(function (k) {
+          if (n[k] === undefined || n[k] === null || n[k] === "") n[k] = d[k];
+        });
+      });
+      return s;
+    }
     function loadSettings(str) {
       configError = "";
       if (!str || !str.trim()) return clone(DEFAULTS);
       try {
         const parsed = JSON.parse(str);
-        return Object.assign(clone(DEFAULTS), parsed);
+        return applyDefaults(Object.assign(clone(DEFAULTS), parsed));
       } catch (e) {
         configError = "the saved layout is not valid JSON (" + str.length +
           " chars received). If it looks truncated, the config entry was cut off.";
@@ -529,6 +540,7 @@
     }
     function saveSettings() {
       const doc = Object.assign({}, SETTINGS, { roots: (SETTINGS.roots || []).map(trimNode) });
+      if (SETTINGS.defaults) doc.defaults = SETTINGS.defaults;
       const str = JSON.stringify(doc);
       const patch = {};
       for (let i = 0; i < CHUNK_KEYS.length; i++) {
